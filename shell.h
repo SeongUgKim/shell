@@ -1,0 +1,15 @@
+#ifndef SHELL_H
+#define SHELL_H
+
+#define MAX_INPUT_SIZE 1024
+#define MAX_TOKEN_SIZE 64
+#define MAX_NUM_TOKENS 64
+#define MAX_HISTORY_SIZE 1000
+#define SHELL_PROMPT "shell> "
+
+void shell_loop(void);
+char *read_line(void);
+char *trim_whitespace(char *str);
+char **tokenize_line(char *line);
+void free_tokens(char **tokens);
+#endif /* SHELL_H */
