@@ -12,4 +12,7 @@ char *read_line(void);
 char *trim_whitespace(char *str);
 char **tokenize_line(char *line);
 void free_tokens(char **tokens);
+int execute_command(char **args);
+int num_builtins(void);
+int launch_program(char **args);
 #endif /* SHELL_H */

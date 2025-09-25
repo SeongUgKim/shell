@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/wait.h>
 #include "shell.h"
+
+static volatile sig_atomic_t interrupted = 0;
 char *builtin_str[] = {
     "cd",
     "pwd",
@@ -29,8 +34,10 @@ void shell_loop(void)
             continue;
         }
         args = tokenize_line(line);
+        status = execute_command(args);
         free(line);
         free_tokens(args);
+        interrupted = 0;
     }
 }
 
@@ -117,4 +124,46 @@ void free_tokens(char **tokens)
         free(tokens[i]);
     }
     free(tokens);
+}
+
+int execute_command(char **args)
+{
+    if (args[0] == NULL) {
+        return 1;
+    }
+    if (interrupted) {
+        return 1;
+    }
+    // for (int i = 0; i < num_builtins(); ++i) {
+    //     if (strcmp(args[0], builtin_str[i]) == 0) {
+    //         return (*builtin_func[i])(args);
+    //     }
+    // }
+    return launch_program(args); 
+}
+
+int num_builtins(void)
+{
+    return sizeof(builtin_str) / sizeof(char *);
+}
+
+int launch_program(char **args)
+{
+    pid_t pid;
+    int status;
+    pid = fork();
+    if (pid == 0) {
+        // child process
+        if (execvp(args[0], args) == -1) {
+            perror("shell");
+        }
+        exit(1);
+    } else if (pid < 0) {
+        perror("shell: fork");
+    } else {
+        do {
+            waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+    return 1;
 }
