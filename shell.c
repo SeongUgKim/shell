@@ -15,6 +15,14 @@ char *builtin_str[] = {
     "history"
 };
 
+int (*builtin_func[]) (char **) = {
+    &shell_cd,
+    &shell_pwd,
+    &shell_exit,
+    &shell_help,
+    &shell_history
+};
+
 int main(int argc, char **argv)
 {
     shell_loop();
@@ -134,11 +142,14 @@ int execute_command(char **args)
     if (interrupted) {
         return 1;
     }
-    // for (int i = 0; i < num_builtins(); ++i) {
-    //     if (strcmp(args[0], builtin_str[i]) == 0) {
-    //         return (*builtin_func[i])(args);
-    //     }
-    // }
+    if (count_pipes(args) > 0) {
+        return handle_pipes(args);
+    }
+    for (int i = 0; i < num_builtins(); ++i) {
+        if (strcmp(args[0], builtin_str[i]) == 0) {
+            return (*builtin_func[i])(args);
+        }
+    }
     return launch_program(args); 
 }
 
@@ -164,6 +175,130 @@ int launch_program(char **args)
         do {
             waitpid(pid, &status, WUNTRACED);
         } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+    return 1;
+}
+
+int shell_cd(char **args) 
+{
+    if (args[1] == NULL) {
+        // no argument provided, go to home directory
+        char *home = getenv("HOME");
+        if (home == NULL) {
+            fprintf(stderr, "shell: cd: HOME not set\n");
+            return 1;
+        }
+        if (chdir(home) != 0) {
+            perror("shell: cd");
+        } 
+    } else {
+        if (chdir(args[1]) != 0) {
+            perror("shell: cd");
+        }
+    }
+    return 1; 
+}
+
+int shell_pwd(char **args) 
+{
+    char *cwd = getcwd(NULL, 0);
+    if (cwd == NULL) {
+        perror("shell: pwd");
+    } else {
+        printf("%s\n", cwd);
+        free(cwd);
+    }
+    return 1;
+}
+
+int shell_exit(char **args) 
+{
+    return 0;
+}
+
+int shell_help(char **args)
+{
+    printf("Shell - Coding Challenges Shell\n");
+    printf("Built-in commands:\n");
+    for (int i = 0; i < num_builtins(); ++i) {
+        printf("    %s\n", builtin_str[i]);
+    }
+    printf("\nFeatures supported:\n");
+    printf("    - External program execution\n");
+    printf("    - Command pipes (|)\n");
+    printf("    - Command history\n");
+    printf("    - Signal handling (Ctrl+C)\n");
+    printf("\nUse 'man <command>' for help on external programs\n");
+    return 1;
+}
+
+int shell_history(char **args)
+{
+}
+
+int count_pipes(char **args)
+{
+    int count = 0;
+    for (int i = 0; args[i] != NULL; ++i) {
+        if (strcmp(args[i], "|") == 0) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+int handle_pipes(char **args)
+{
+    int pipe_count = count_pipes(args);
+    int pipefd[2 * pipe_count];
+    int cmd_start = 0;
+    int i, j;
+    pid_t pid;
+    for (i = 0; i < pipe_count; ++i) {
+        if (pipe(pipefd + i * 2) < 0) {
+            perror("shell: pipe");
+            return 1;
+        }
+    }
+    for (i = 0; i <= pipe_count; ++i) {
+        int cmd_end = cmd_start;
+        while (args[cmd_end] != NULL && strcmp(args[cmd_end], "|") != 0) {
+            cmd_end++;
+        }
+        char **cmd_args = malloc((cmd_end - cmd_start + 1) * sizeof(char*));
+        for (j = 0; j < cmd_end - cmd_start; j++) {
+            cmd_args[j] = args[cmd_start + j];
+        }
+        cmd_args[j] = NULL;
+        pid = fork();
+        if (pid == 0) {
+            if (i > 0) { // Not first command
+                dup2(pipefd[(i - 1) * 2], STDIN_FILENO);
+            }
+            if (i < pipe_count) { // Not last command
+                dup2(pipefd[i * 2 + 1], STDOUT_FILENO);
+            }
+            // close all pipe file descriptors
+            for (j = 0; j < 2 * pipe_count; ++j) {
+                close(pipefd[j]);
+            }
+            if (execvp(cmd_args[0], cmd_args) == -1) {
+                perror("shell");
+            }
+            exit(1);
+        } else if (pid < 0) {
+            perror("shell: fork");
+            free(cmd_args);
+            break;
+        }
+        free(cmd_args);
+        cmd_start = cmd_end + 1;
+    }
+    for (i = 0; i < 2 * pipe_count; ++i) {
+        close(pipefd[i]);
+    }
+    for (i = 0; i <= pipe_count; ++i) {
+        wait(NULL);
     }
     return 1;
 }

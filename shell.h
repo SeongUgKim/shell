@@ -15,4 +15,11 @@ void free_tokens(char **tokens);
 int execute_command(char **args);
 int num_builtins(void);
 int launch_program(char **args);
+int shell_cd(char **args);
+int shell_pwd(char **args);
+int shell_exit(char **args);
+int shell_help(char **args);
+int shell_history(char **args);
+int count_pipes(char **args);
+int handle_pipes(char **args);
 #endif /* SHELL_H */
